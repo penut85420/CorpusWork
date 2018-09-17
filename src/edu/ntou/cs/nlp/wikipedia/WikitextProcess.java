@@ -1,0 +1,555 @@
+package edu.ntou.cs.nlp.wikipedia;
+
+import java.io.*;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.xml.parsers.*;
+
+import org.oppai.io.LibraryIO;
+import org.oppai.utils.LibraryUtils;
+import org.w3c.dom.*;
+
+import edu.ntou.cs.nlp.extend.*;
+import edu.ntou.cs.nlp.wordSegmentation.segmentor.WordSegmentor;
+import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.ling.IndexedWord;
+import edu.stanford.nlp.ling.SentenceUtils;
+import edu.stanford.nlp.parser.lexparser.LexicalizedParser;
+import edu.stanford.nlp.trees.GrammaticalStructure;
+import edu.stanford.nlp.trees.GrammaticalStructureFactory;
+import edu.stanford.nlp.trees.Tree;
+import edu.stanford.nlp.trees.TreebankLanguagePack;
+import edu.stanford.nlp.trees.TypedDependency;
+
+import static org.oppai.utils.LibraryUtils.log;
+
+public class WikitextProcess {
+	final static String[] InputDirPath = {
+		"D:\\Documents\\Corpus\\wiki\\Step0_zhwiki_wikitext_tw\\",				// 0
+		"D:\\Documents\\Corpus\\wiki\\Step1_zhwiki_wikitext_wellformed_xml\\",	// 1
+		"D:\\Documents\\Corpus\\wiki\\Step2_zhwiki_first\\",					// 2
+		"D:\\Documents\\Corpus\\wiki\\Step3_zhwiki_plaintext\\",				// 3
+		"D:\\Documents\\Corpus\\wiki\\Step4_zhwiki_seg\\",						// 4
+		"D:\\Documents\\Corpus\\wiki\\Step5_zhwiki_simple\\",					// 5
+		"D:\\Documents\\Corpus\\wiki\\Step6_zhwiki_dep\\",						// 6
+	};
+	
+	public static void main(String[] args) throws Exception {
+		LibraryUtils.timestamp("WikitextProcess");
+		// Regular Step
+		// Step1_SimpleReplace();
+		// Step2_FirstParagraphRetrive();
+		// Step3_WikitextToPlaintext();
+		// Step4_WordSeg();
+		// step5_MakeSimple();
+		Step6_DependencyAnalysis();
+		
+		// Process above done in 472s 
+		
+		// Testing Field
+		// Test_ShowDisambiguation();
+		
+		log("WikitextProcess done in " + LibraryUtils.timestamp("WikitextProcess") + "s");
+		LibraryUtils.bgm();
+	}
+	
+	/**
+	 * Common Begin & End
+	 * 
+	 * log(processName + " begin");
+	 * LibraryUtils.timestamp();
+	 * 
+	 * System.out.printf("%s done in %.3f seconds\n", processName, LibraryUtils.timestamp());
+	 */
+
+	/**
+	 * 將 "&#160" 轉換成 "&#160;"，以符合正規 XML Format
+	 * @throws Exception
+	 */
+	
+	public static void Step1_SimpleReplace() throws Exception {
+		new CorpusLabProcess("Simple replace", InputDirPath[0], InputDirPath[1]) {
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
+				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					String content = LibraryIO.loadFile(fin);
+					 
+					// 將 "&#160" 替換成 "&#160;" 以符合 XML API 的規格
+					content = content.replaceAll("&#160[^;]", "&#160;");
+					
+					// 移除 "\r" 並處理多餘的 "\n\n"
+					content = content.replaceAll("\r", "").replaceAll("\n\n", "\n");
+					
+					LibraryIO.writeFile(outputDirPath + fin.getName(), content);
+					System.out.println(fin.getName() + " done");
+				}
+			}
+		}.start();
+		
+		// 1 thread  done in 340s
+		// 8 threads done in  90s
+	}
+	
+	// TODO: Category retrive incorrect
+	/**
+	 * 擷取首段章節的部分
+	 * 並且移除年表、消岐義、重定向等頁面
+	 */
+	
+	public static void Step2_FirstParagraphRetrive() throws Exception {
+		
+		new CorpusLabProcess("First paragraph retrive", InputDirPath[1], InputDirPath[2]) {
+			
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
+				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					// XML Document IO
+					Document doc =  LibraryIO.loadXML(fin);
+					Document fout = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+					
+					// Input node
+					NodeList nd = doc.getElementsByTagName("page");
+					
+					// Output pageset
+					Element pageset = fout.createElement("pageset");
+					fout.appendChild(pageset);
+					
+					for (int i = 0; i < nd.getLength(); i++) {
+						// Output page
+						Element page = fout.createElement("page");
+						page.setAttribute("id", String.valueOf(i));
+		
+						// Deal with title
+						Element e = (Element) nd.item(i);
+						String title = e.getElementsByTagName("title").item(0).getTextContent();
+						
+						// Skip if list kind
+						if (title.endsWith("年表")) continue;
+						if (title.endsWith("列表")) continue;
+						
+						// Deal with text
+						String text = e.getElementsByTagName("text").item(0).getTextContent();
+						
+						// Skip if disambiguation or redirect
+						if (text.toLowerCase().contains("{{disambiguation}}")) continue;
+						if (text.toLowerCase().contains("{{disambiguation|")) continue;
+						if (text.toLowerCase().startsWith("#redirect")) continue;
+						if (text.startsWith("#重定向")) continue;
+						
+						// Deal with category
+						Element category = fout.createElement("category");
+						Matcher m = Pattern.compile("(?i)\\[\\[category:(.*?)\\]\\]").matcher(text);
+						if (m.find()) {
+							String[] cat = m.group(1).split("\\|");
+							
+							for (String s : cat) {
+								String ts = s.trim();
+								if (!ts.isEmpty() && !ts.equals("*"))
+									category.appendChild(createTextTag(fout, "cat", new String(ts.getBytes(), "UTF-8")));
+							}
+							page.appendChild(category);
+						}
+						
+						// Deal with first paragraph
+						text = clearTag(text, "<!--", "<", ">", 1);
+						Integer endlen = text.indexOf("==");
+						endlen = endlen > 0? endlen: text.length();
+						text = text.substring(0, endlen);
+						
+						page.appendChild(createTextTag(fout, "title", title));
+						page.appendChild(createTextTag(fout, "text", text));
+						page.appendChild(category);
+						pageset.appendChild(page);
+					}
+					
+					// XML Output
+					LibraryIO.writeXML(outputDirPath + fin.getName(), fout);
+					System.out.println(fin.getName() + " done");
+				}
+			}
+		}.start();
+		
+		// 8 threads done in 88s
+	}
+
+	/**
+	 * 將 Wikitext 語法移除
+	 * @throws Exception
+	 */
+	
+	public static void Step3_WikitextToPlaintext() throws Exception {
+		String processName = "Wikitext to plaintext";
+		String inputDirPath = "D:\\Documents\\Corpus\\wiki\\Step2_zhwiki_first\\";
+		String outputDirPath = "D:\\Documents\\Corpus\\wiki\\Step3_zhwiki_plaintext\\";
+		
+		File inputDir = new File(inputDirPath);
+		File outputDir = new File(outputDirPath);
+		
+		if (!outputDir.exists())
+			outputDir.mkdirs();
+		
+		log(processName + " begin");
+		LibraryUtils.timestamp();
+		
+		SyncQueue<File> sq = new SyncQueue<File>(Arrays.asList(inputDir.listFiles()));
+
+		Runnable r = ()->{
+			int tid = LibraryUtils.getRand(10, 99);
+			while (!sq.isEmpty()) {
+				try {
+					File fin = sq.poll();
+					Document doc = LibraryIO.loadXML(fin);
+					NodeList nd = doc.getElementsByTagName("page");
+					
+					for (int i = 0; i < nd.getLength(); i++) {
+						Element page = (Element)nd.item(i);
+						String title = page.getElementsByTagName("title").item(0).getTextContent();
+						Node textNode = page.getElementsByTagName("text").item(0);
+						String text = textNode.getTextContent();
+						text = text.replaceAll("(?i)\\{\\{" + Pattern.quote(title) + "\\}\\}", title); // 把 Fake Title 語法改成 Plain Text
+						text = clearTag(text, "{{", "{", "}", 2); // 移除 {{tag}} 語法
+						text = clearTag(text, "[[File", "[", "]", 2); // 移除圖片插入語法
+						text = text.replaceAll("(?s)<ref.*?>.*?</ref>", ""); // 移除 <ref..>text</ref> 中間的文字
+						text = clearTag(text, "<", ">"); // 移除所有 <tag> 標籤
+						text = clearTag(text, "-{T", "{", "}", 1); // 移除語言選擇
+						text = text.replaceAll("\\-\\{.*?(zh-hant:)(.*?);(.*?)}-", "$2"); // 提取正體中文的稱呼
+						text = text.replaceAll("\\-\\{.*?(zh-tw:)(.*?);(.*?)}-", "$2"); // 提取正體中文的稱呼
+						text = text.replaceAll("\\-\\{(.*?)\\}\\-", "$1"); // 提取單詞
+						text = clearTag(text, "(", ")"); // 移除所有半形括號與內容
+						text = clearTag(text, "（", "）"); // 移除所有全形括號與內容
+						text = clearTag(text, "{", "}"); // 移除所有 {tag} 標籤
+						text = getLinkText(text); // 提取頁面連結文字
+						text = text.replaceAll("'", ""); // 移除粗體標記
+						text = text.replaceAll("\\*", ""); // 移除粗體標記
+						text = text.replaceAll("[\r\n]", ""); // 移除所有換行
+						
+						textNode.setTextContent(text.trim());
+					}
+					
+					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
+					System.out.printf("%s done by thread %d\n", fin.getName(), tid);
+				} catch (Exception e) { e.printStackTrace(); }
+			}
+		};
+		
+		List<Thread> tlist = new ArrayList<>();
+		
+		for (int i = 0; i < 8; i++) {
+			tlist.add(new Thread(r));
+			tlist.get(i).start();
+		}
+		
+		for (Thread t : tlist) t.join();
+
+		System.out.printf("%s done in %.3f seconds\n", processName, LibraryUtils.timestamp());
+		
+		//  1 thread  done in 484s
+		//  2 threads done in 265s
+		//  4 threads done in 163s
+		//  6 threads done in 146s
+		//  8 threads done in 141s
+		// 16 threads done in 144s
+		// 32 threads done in 149s
+	}
+	
+	/**
+	 * 對首段文章進行斷詞
+	 * @throws Exception
+	 */
+	
+	public static void Step4_WordSeg() throws Exception {
+		String alphabetListPath = "D:\\Documents\\JavaWorkspace\\WordSegmentation\\data\\list_alphabet.txt";
+		String segSymbolInfoPath = "D:\\Documents\\Dictionary\\\\seg_symbol_space_only.txt";
+		String dictPath = "D:\\Documents\\JavaWorkspace\\WordSegmentation\\data\\dictionary_main.txt";
+		WordSegmentor ws = new WordSegmentor(alphabetListPath, segSymbolInfoPath, dictPath);
+		ws.MaximumMatch("", 1);
+		
+		new CorpusLabProcess("Word segmention", InputDirPath[3], InputDirPath[4], 4) {
+			
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {		
+				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					System.out.println("Segmenting " + fin.getName());
+					Document doc = LibraryIO.loadXML(fin);
+					NodeList context = doc.getElementsByTagName("text");
+					
+					for (int i = 0; i < context.getLength(); i++) {
+						// 先將 title 移除
+						String seged = ws.MaximumMatch(context.item(i).getTextContent().replaceAll("={2,}+[^=]+?=+", ""), 1).replaceAll("[\r\n]", "");
+						context.item(i).setTextContent(new String(seged.getBytes("UTF-8"), "UTF-8"));
+					}
+					
+					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
+				}
+			}
+		}.start();
+		
+		// 1 thread  done in 254s
+		// 4 threads done in 140s
+		// 8 threads done in 126s
+	}
+	
+	public static void step5_MakeSimple() throws Exception {
+		new CorpusLabProcess("Make simple sentence", InputDirPath[4], InputDirPath[5]) {
+			
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
+				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					Document doc = LibraryIO.loadXML(fin);
+					NodeList text = doc.getElementsByTagName("text");
+					
+					for (int i = 0; i < text.getLength(); i++) {
+						String t = text.item(i).getTextContent();
+						int idx = t.indexOf("。");
+						t = t.substring(0, idx > 0? idx + 1: t.length());
+						
+						text.item(i).setTextContent(t);
+					}
+					
+					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
+					log(fin.getName() + " done");
+				}
+			}
+		}.start();
+		
+		// Done in 70。
+	}
+	
+	public static void Step6_DependencyAnalysis() throws Exception {
+		String parserModel = "edu/stanford/nlp/models/lexparser/chineseFactored.ser.gz";
+		
+		new CorpusLabProcess("Dependency analysis", InputDirPath[5], InputDirPath[6], 1) {
+			
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
+				while (!sq.isEmpty()) {
+					LexicalizedParser lp = LexicalizedParser.loadModel(parserModel);
+					TreebankLanguagePack tlp = lp.treebankLanguagePack();
+					GrammaticalStructureFactory gsf = tlp.grammaticalStructureFactory();
+					
+					File fin = sq.poll();
+					LibraryUtils.timestamp(fin.toString());
+					Document doc = LibraryIO.loadXML(fin);
+					NodeList pages = doc.getElementsByTagName("page");
+					int pageslen = pages.getLength();
+					
+					for (int i = 0; i < pageslen; i++) {
+						Element page = (Element) pages.item(i);
+						Element classify = doc.createElement("classify");
+						
+						String page_title = page.getElementsByTagName("title").item(0).getTextContent();
+						String text = page.getElementsByTagName("text").item(0).getTextContent();
+						try {
+							List<CoreLabel> rawWords = SentenceUtils.toCoreLabelList(text.split(" "));
+							Tree parse = lp.apply(rawWords);
+							GrammaticalStructure gs = gsf.newGrammaticalStructure(parse);
+							List<TypedDependency> tdl = gs.typedDependenciesCCprocessed();
+							Iterator<TypedDependency> it = tdl.iterator();
+							
+							TypedDependency first = it.next();
+							String title = first.dep().word();
+							IndexedWord tobe = first.gov();
+							
+							String classifyContent = String.format("Result:\n%s 是 %s (%s)\n", title, tobe.word(), first.reln());
+							
+							while (it.hasNext()) {
+								TypedDependency td = it.next();
+								// if (tobe.equals(td.gov())) log(td);
+								if (tobe.equals(td.gov())) {
+									if (td.reln().getShortName().equals("compound:nn"))
+										classifyContent += String.format("而且是 %s 的 %s\n", td.dep().word(), tobe.word());
+									else if (td.reln().getShortName().equals("nmod:assmod"))
+										classifyContent += String.format("而且是某種 %s 的 %s\n", td.dep().word(), tobe.word());
+								}
+							}
+							
+							classify.setTextContent(classifyContent);
+							page.appendChild(classify);
+							
+							rawWords = null;
+							parse = null;
+							gs = null;
+							tdl = null; 
+							it = null;
+							
+							System.gc();
+							
+							System.out.printf("%s %d/%d done\n", fin.getName(), i + 1, pageslen);
+						} catch (Exception e) {
+							System.err.printf("%s error at %s\n", page_title, fin.getName());
+							e.printStackTrace();
+						}
+					}
+					
+					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
+					lp = null; tlp = null; gsf = null; System.gc();
+					
+					log(fin.getName() + " done in " + LibraryUtils.timestamp(fin.toString()));
+				}
+			}
+		}.start();
+	}
+	
+	// ===== Testing =====
+	
+	public static void Test_ShowDisambiguation() throws Exception {
+		
+		/**
+		 * 此段程式碼為偵測消岐義的頁面
+		 * 透過偵測該頁面內容是否包含 "{{disambiguation}}" 和 "{{disambiguation|" 為基準
+		 * 若單純偵測 "disambiguation"
+		 * 可能會誤刪內文包含引用消岐義語法的一般頁面
+		 * 
+		 * 2018三月的版本初估有480個消岐義頁面
+		 */
+		
+		String processName = "Show disambiguation";
+		String inputDirPath = "D:\\Documents\\Corpus\\wiki\\Step1_zhwiki_wikitext_wellformed_xml\\";
+		inputDirPath = "D:\\Documents\\Corpus\\wiki\\Step1_zhwiki_wikitext_wellformed_xml\\";
+		String outputFileName = "D:\\Documents\\Corpus\\wiki\\Test\\disambiguation.xml";
+		outputFileName = "D:\\Documents\\Corpus\\wiki\\Test\\disambiguation2.xml";
+		
+		File inputDir = new File(inputDirPath);
+		File outputDir = new File(outputFileName);
+		
+		if (!outputDir.getParentFile().exists())
+			outputDir.getParentFile().mkdirs();
+		
+		Document fout = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+		Element fout_pageset = fout.createElement("pageset"); 
+		
+		System.out.println(processName + " begin");
+		LibraryUtils.timestamp();
+		
+		int total = 0;
+		
+		for (File fin : inputDir.listFiles()) {
+			Document doc = LibraryIO.loadXML(fin);
+			NodeList nd = doc.getElementsByTagName("page");
+			
+			for (int i = 0; i < nd.getLength(); i++) {
+				Element page = (Element)nd.item(i);
+				String text = page.getElementsByTagName("text").item(0).getTextContent();
+				
+				if (text.toLowerCase().contains("{{disambiguation}}") || text.toLowerCase().contains("{{disambiguation|")) {
+					total++;
+					String title = page.getElementsByTagName("title").item(0).getTextContent();
+					System.out.println(title + " is disambiguation");
+					Element fout_page = fout.createElement("page");
+					Element fout_location = fout.createElement("location");
+					Element fout_title = fout.createElement("title");
+					Element fout_text = fout.createElement("text");
+					
+					fout_location.setTextContent(fin.getName());
+					fout_title.setTextContent(title);
+					fout_text.setTextContent(text);
+					
+					fout_page.appendChild(fout_location);
+					fout_page.appendChild(fout_title);
+					fout_page.appendChild(fout_text);
+					fout_pageset.appendChild(fout_page);
+				}
+			}
+			System.out.println(fin.getName() + " done");
+		}
+		
+		Element fout_total = fout.createElement("total");
+		fout_total.setTextContent(String.valueOf(total));
+		fout_pageset.appendChild(fout_total);
+		fout.appendChild(fout_pageset);
+		LibraryIO.writeXML(outputFileName, fout);
+		
+		System.out.printf("%s done in %.3f seconds\n", processName, LibraryUtils.timestamp());
+		
+		// Done in 169s
+	}
+	
+	// ===== Tool Functions =====
+	
+	/**
+	 * 消除 Wikitext 中，所有以左右對稱括號之語法。
+	 * 例："ab{{123{456}789}}cd" 會被轉換成 "abcd"
+	 * @param content 需要處理的字串
+	 * @param tagTrg 該語法之開頭，以上例為 "{{"
+	 * @param tagLeft 該語法對稱括號之左括號，以上例為 "{"
+	 * @param tagRight 該語法對稱括號之又括號，以上例為 "}"
+	 * @param initLeft 該語法起始左括號量，以上例為 2
+	 * @return 處理完成後的字串
+	 */
+	
+	
+	public static String clearTag(String content, String tagTrg, String tagLeft, String tagRight, int initLeft) {
+		while (content.indexOf(tagTrg) != -1) {
+			int i, left = initLeft, 
+				begin = content.indexOf(tagTrg);
+			
+			String tBefore = content.substring(0, begin), 
+					tLeft = content.substring(begin + tagTrg.length());
+			char[] c = tLeft.toCharArray();
+			
+			for (i = 0; i < c.length; i++) {
+				if (tagLeft.equals(String.valueOf(c[i])))
+					left++;
+				else if (tagRight.equals(String.valueOf(c[i])))
+					left--;
+				if (left == 0) break;
+			}
+			if (i == c.length) { 
+				// System.err.println("Not matched");
+				return content;
+			}
+			tLeft = tLeft.substring(i + tagRight.length());
+			content = tBefore +  tLeft;
+		}
+		
+		return content;
+	}
+	
+	public static String clearTag(String content, String tagLeft, String tagRight) {
+		return clearTag(content, tagLeft, tagLeft, tagRight, 1);
+	}
+	
+	/**
+	 * 提取 Wiki 內參考連結的字串
+	 * @param content that include sth like [[link]]
+	 * @return link
+	 */
+	
+	
+	public static String getLinkText(String content) {
+		while (content.indexOf("[[") != -1) {
+			try {
+				int begin = content.indexOf("[[");
+				int end = content.indexOf("]]");
+				String t = content.substring(begin + 2, end);
+				while (t.indexOf("|") != -1)
+					t = t.substring(t.indexOf("|") + 1);
+				
+				content = content.substring(0, begin) + t + content.substring(end + 2);
+			} catch (Exception e) { return content; }
+		}
+		
+		return content;
+	}
+	
+	/**
+	 * 創建一個包含一段指定的文字的 XML Text Node
+	 * @param d
+	 * @param tag
+	 * @param text
+	 * @return
+	 */
+	
+	public static Element createTextTag(Document d, String tag, String text) {
+		Element e = d.createElement(tag);
+		e.appendChild(d.createTextNode(text));
+		return e;
+	}
+
+}
