@@ -12,6 +12,7 @@ import org.oppai.utils.LibraryUtils;
 import org.w3c.dom.*;
 
 import edu.ntou.cs.nlp.extend.*;
+import edu.ntou.cs.nlp.object.CorpusLabProcess;
 import edu.ntou.cs.nlp.wordSegmentation.segmentor.WordSegmentor;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.ling.IndexedWord;
@@ -24,16 +25,19 @@ import edu.stanford.nlp.trees.TreebankLanguagePack;
 import edu.stanford.nlp.trees.TypedDependency;
 
 import static org.oppai.utils.LibraryUtils.log;
+import static edu.ntou.cs.nlp.object.WordsList.isCall;
+import static edu.ntou.cs.nlp.object.WordsList.isAlso;
 
 public class WikitextProcess {
 	final static String[] InputDirPath = {
-		"D:\\Documents\\Corpus\\wiki\\Step0_zhwiki_wikitext_tw\\",				// 0
-		"D:\\Documents\\Corpus\\wiki\\Step1_zhwiki_wikitext_wellformed_xml\\",	// 1
-		"D:\\Documents\\Corpus\\wiki\\Step2_zhwiki_first\\",					// 2
-		"D:\\Documents\\Corpus\\wiki\\Step3_zhwiki_plaintext\\",				// 3
-		"D:\\Documents\\Corpus\\wiki\\Step4_zhwiki_seg\\",						// 4
-		"D:\\Documents\\Corpus\\wiki\\Step5_zhwiki_simple\\",					// 5
-		"D:\\Documents\\Corpus\\wiki\\Step6_zhwiki_dep\\",						// 6
+		"D:\\Documents\\Corpus\\wiki\\Step0_zhwiki_wikitext_tw\\",
+		"D:\\Documents\\Corpus\\wiki\\Step1_zhwiki_wikitext_wellformed_xml\\",
+		"D:\\Documents\\Corpus\\wiki\\Step2_zhwiki_first\\",
+		"D:\\Documents\\Corpus\\wiki\\Step3_zhwiki_plaintext\\",
+		"D:\\Documents\\Corpus\\wiki\\Step4_zhwiki_simple\\",
+		"D:\\Documents\\Corpus\\wiki\\Step5_zhwiki_seg\\",
+		"D:\\Documents\\Corpus\\wiki\\Step6_zhwiki_rewrite\\",
+		"D:\\Documents\\Corpus\\wiki\\Step7_zhwiki_dep\\",
 	};
 	
 	public static void main(String[] args) throws Exception {
@@ -42,9 +46,10 @@ public class WikitextProcess {
 		// Step1_SimpleReplace();
 		// Step2_FirstParagraphRetrive();
 		// Step3_WikitextToPlaintext();
-		// Step4_WordSeg();
-		// step5_MakeSimple();
-		Step6_DependencyAnalysis();
+		// Step4_MakeSimple();
+		// Step5_WordSeg();
+		// Step6_Rewrite();
+		Step7_DependencyAnalysis();
 		
 		// Process above done in 472s 
 		
@@ -213,7 +218,9 @@ public class WikitextProcess {
 						text = text.replaceAll("(?i)\\{\\{" + Pattern.quote(title) + "\\}\\}", title); // 把 Fake Title 語法改成 Plain Text
 						text = clearTag(text, "{{", "{", "}", 2); // 移除 {{tag}} 語法
 						text = clearTag(text, "[[File", "[", "]", 2); // 移除圖片插入語法
+						text = text.replaceAll("<.*?/>", ""); // 移除 Self-Closed Tag
 						text = text.replaceAll("(?s)<ref.*?>.*?</ref>", ""); // 移除 <ref..>text</ref> 中間的文字
+						text = text.replaceAll("(?s)<div.*?>.*?</div>", ""); // 移除 <div..>text</div> 中間的文字
 						text = clearTag(text, "<", ">"); // 移除所有 <tag> 標籤
 						text = clearTag(text, "-{T", "{", "}", 1); // 移除語言選擇
 						text = text.replaceAll("\\-\\{.*?(zh-hant:)(.*?);(.*?)}-", "$2"); // 提取正體中文的稱呼
@@ -257,45 +264,12 @@ public class WikitextProcess {
 	}
 	
 	/**
-	 * 對首段文章進行斷詞
+	 * 將首段章節簡化至第一個句點
 	 * @throws Exception
 	 */
 	
-	public static void Step4_WordSeg() throws Exception {
-		String alphabetListPath = "D:\\Documents\\JavaWorkspace\\WordSegmentation\\data\\list_alphabet.txt";
-		String segSymbolInfoPath = "D:\\Documents\\Dictionary\\\\seg_symbol_space_only.txt";
-		String dictPath = "D:\\Documents\\JavaWorkspace\\WordSegmentation\\data\\dictionary_main.txt";
-		WordSegmentor ws = new WordSegmentor(alphabetListPath, segSymbolInfoPath, dictPath);
-		ws.MaximumMatch("", 1);
-		
-		new CorpusLabProcess("Word segmention", InputDirPath[3], InputDirPath[4], 4) {
-			
-			@Override
-			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {		
-				while (!sq.isEmpty()) {
-					File fin = sq.poll();
-					System.out.println("Segmenting " + fin.getName());
-					Document doc = LibraryIO.loadXML(fin);
-					NodeList context = doc.getElementsByTagName("text");
-					
-					for (int i = 0; i < context.getLength(); i++) {
-						// 先將 title 移除
-						String seged = ws.MaximumMatch(context.item(i).getTextContent().replaceAll("={2,}+[^=]+?=+", ""), 1).replaceAll("[\r\n]", "");
-						context.item(i).setTextContent(new String(seged.getBytes("UTF-8"), "UTF-8"));
-					}
-					
-					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
-				}
-			}
-		}.start();
-		
-		// 1 thread  done in 254s
-		// 4 threads done in 140s
-		// 8 threads done in 126s
-	}
-	
-	public static void step5_MakeSimple() throws Exception {
-		new CorpusLabProcess("Make simple sentence", InputDirPath[4], InputDirPath[5]) {
+	public static void Step4_MakeSimple() throws Exception {
+		new CorpusLabProcess("Make simple sentence", InputDirPath[3], InputDirPath[4]) {
 			
 			@Override
 			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
@@ -321,11 +295,138 @@ public class WikitextProcess {
 		// Done in 70。
 	}
 	
-	public static void Step6_DependencyAnalysis() throws Exception {
+	/**
+	 * 對首段文章進行斷詞
+	 * @throws Exception
+	 */
+	
+	public static void Step5_WordSeg() throws Exception {
+		String alphabetListPath = "D:\\Documents\\JavaWorkspace\\WordSegmentation\\data\\list_alphabet.txt";
+		String segSymbolInfoPath = "D:\\Documents\\Dictionary\\\\seg_symbol_space_only.txt";
+		String dictPath = "D:\\Documents\\JavaWorkspace\\WordSegmentation\\data\\dictionary_main.txt";
+		WordSegmentor ws = new WordSegmentor(alphabetListPath, segSymbolInfoPath, dictPath);
+		ws.MaximumMatch("", 1);
+		
+		new CorpusLabProcess("Word segmention", InputDirPath[4], InputDirPath[5], 4) {
+			
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {		
+				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					System.out.println("Segmenting " + fin.getName());
+					Document doc = LibraryIO.loadXML(fin);
+					NodeList context = doc.getElementsByTagName("text");
+					
+					for (int i = 0; i < context.getLength(); i++) {
+						// 先將 title 移除
+						String seged = ws.MaximumMatch(context.item(i).getTextContent().replaceAll("={2,}+[^=]+?=+", ""), 1).replaceAll("[\r\n]", "");
+						context.item(i).setTextContent(new String(seged.getBytes("UTF-8"), "UTF-8"));
+					}
+					
+					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
+				}
+			}
+		}.start();
+		
+		// 1 thread  done in 254s
+		// 4 threads done in 140s
+		// 8 threads done in 126s
+	}
+	
+	/**
+	 * 將首句改寫成較為簡短、簡單的構句
+	 * @throws Exception 
+	 */
+
+	public static void Step6_Rewrite() throws Exception {
+		new CorpusLabProcess("Rewrite", InputDirPath[5], InputDirPath[6]) {
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
+				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					
+					Document doc = LibraryIO.loadXML(fin);
+					NodeList nd = doc.getElementsByTagName("text");
+					
+					for (int i = 0; i < nd.getLength(); i++) {
+						String text = nd.item(i).getTextContent();
+						
+						text = text.replaceAll("、", "和");
+						
+						String[] seg = text.split(" ");
+						
+						// 修掉 Fake Title 造成的前兩個詞重複
+						if (seg.length > 1 && seg[0].equals(seg[1])) seg[1] = "";
+						
+						String newContent = "";
+						boolean isIs = false, isOf = false;
+						
+						for (int j = 0; j < seg.length; j++) {
+							// 暴力修掉「別稱類」修飾語
+							try {
+								if (isCall(seg[j]) || (isAlso(seg[j-1]) && seg[j].equals("稱"))) {
+									if (seg[j-1].equals("，") || isAlso(seg[j-1]))
+										seg[j-1] = "";
+									seg[j] = "";
+									seg[j-1] = "";
+									if (seg[j+2].equals("和")) {
+										seg[j+2] = "";
+										seg[j+3] = "";
+										if (seg[j+4].equals("，"))
+											seg[j+4] = "";
+									} else if (seg[j+2].equals("，"))
+										seg[j+2] = "";
+								}
+							} catch (Exception e) { }
+							
+							try {
+								// 把指改成是
+								if (seg[j].equals("泛指")) 
+									seg[j] = "是";
+								else if (seg[j].equals("指")) {
+									seg[j] = "是";
+									if (seg[j+1].equals("的是"))
+										seg[j+1] = "";
+								} else if (seg[j].equals("是") && seg[j+1].equals("指"))
+									seg[j+1] = "";
+								else if (seg[j-1].equals("可以") && seg[j].equals("是")) {
+									seg[j-1] = "";
+								}
+							} catch (Exception e) { }
+							
+							if (seg[j].equals("是")) isIs = true;
+							else if (seg[j].equals("的")) isOf = true;
+							else if (seg[j].equals("，")) {
+								if ((j+1 < seg.length && seg[j+1].equals("以及")) || !isIs || !isOf || j > 50)
+									seg[j] = "";
+								else {
+									seg[j] = "。";
+									newContent += seg[j];
+									break;
+								}
+							}
+							newContent += seg[j] + " ";
+						}
+						
+						nd.item(i).setTextContent(newContent.replaceAll("  ", " "));
+						// break;
+					}
+					
+					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
+					log(fin.getName() + " is done");
+					// break;
+				}
+			}
+		}.start();
+		
+		// 1t 324s
+		// 8t 101s
+	}
+	
+	public static void Step7_DependencyAnalysis() throws Exception {
 		String parserModel = "edu/stanford/nlp/models/lexparser/chineseFactored.ser.gz";
 		
-		new CorpusLabProcess("Dependency analysis", InputDirPath[5], InputDirPath[6], 1) {
-			
+		new CorpusLabProcess("Dependency analysis", InputDirPath[6], InputDirPath[7], 1) {
 			@Override
 			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
 				while (!sq.isEmpty()) {
@@ -343,7 +444,6 @@ public class WikitextProcess {
 						Element page = (Element) pages.item(i);
 						Element classify = doc.createElement("classify");
 						
-						String page_title = page.getElementsByTagName("title").item(0).getTextContent();
 						String text = page.getElementsByTagName("text").item(0).getTextContent();
 						try {
 							List<CoreLabel> rawWords = SentenceUtils.toCoreLabelList(text.split(" "));
@@ -368,23 +468,11 @@ public class WikitextProcess {
 										classifyContent += String.format("而且是某種 %s 的 %s\n", td.dep().word(), tobe.word());
 								}
 							}
-							
 							classify.setTextContent(classifyContent);
 							page.appendChild(classify);
 							
-							rawWords = null;
-							parse = null;
-							gs = null;
-							tdl = null; 
-							it = null;
-							
-							System.gc();
-							
 							System.out.printf("%s %d/%d done\n", fin.getName(), i + 1, pageslen);
-						} catch (Exception e) {
-							System.err.printf("%s error at %s\n", page_title, fin.getName());
-							e.printStackTrace();
-						}
+						} catch (Exception e) { e.printStackTrace(); }
 					}
 					
 					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
@@ -482,7 +570,6 @@ public class WikitextProcess {
 	 * @param initLeft 該語法起始左括號量，以上例為 2
 	 * @return 處理完成後的字串
 	 */
-	
 	
 	public static String clearTag(String content, String tagTrg, String tagLeft, String tagRight, int initLeft) {
 		while (content.indexOf(tagTrg) != -1) {

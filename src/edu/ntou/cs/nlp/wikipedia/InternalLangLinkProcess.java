@@ -4,8 +4,8 @@ import java.io.*;
 
 import org.oppai.io.LibraryIO;
 
-import edu.ntou.cs.nlp.extend.CorpusLabProcess;
 import edu.ntou.cs.nlp.extend.SyncQueue;
+import edu.ntou.cs.nlp.object.CorpusLabProcess;
 
 public class InternalLangLinkProcess {
 	public static void main(String[] args) throws Exception {
