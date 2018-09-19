@@ -37,7 +37,8 @@ public class WikitextProcess {
 		"D:\\Documents\\Corpus\\wiki\\Step4_zhwiki_simple\\",
 		"D:\\Documents\\Corpus\\wiki\\Step5_zhwiki_seg\\",
 		"D:\\Documents\\Corpus\\wiki\\Step6_zhwiki_rewrite\\",
-		"D:\\Documents\\Corpus\\wiki\\Step7_zhwiki_dep\\",
+		"D:\\Documents\\Corpus\\wiki\\Step7_zhwiki_merge\\",
+		"D:\\Documents\\Corpus\\wiki\\Step8_zhwiki_dep\\",
 	};
 	
 	public static void main(String[] args) throws Exception {
@@ -49,7 +50,8 @@ public class WikitextProcess {
 		// Step4_MakeSimple();
 		// Step5_WordSeg();
 		// Step6_Rewrite();
-		Step7_DependencyAnalysis();
+		// Step7_Merge();
+		Step8_DependencyAnalysis();
 		
 		// Process above done in 472s 
 		
@@ -423,10 +425,47 @@ public class WikitextProcess {
 		// 8t 101s
 	}
 	
-	public static void Step7_DependencyAnalysis() throws Exception {
+	public static void Step7_Merge() throws Exception {
+		File dirIn = new File(InputDirPath[6]);
+		File dirOut = new File(InputDirPath[7]);
+		
+		if (!dirOut.exists()) dirOut.mkdirs();
+		
+		int fid = 1;
+		String fileName = InputDirPath[7] + "zhwikiMain_%04d.xml";
+		String fhead = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<pageset>\n";
+		// System.out.printf(fileName, fid);
+		
+		PrintWriter writer = new PrintWriter(String.format(fileName, fid), "UTF-8");
+		writer.write(fhead);
+		long flen = fhead.length();
+		
+		for (File fin : dirIn.listFiles()) {
+			for (String line : LibraryIO.loadFileAsLines(fin.getPath())) {
+				if (line.equals("<pageset>") || line.startsWith("<?xml vers") || line.equals("</pageset>")) continue;
+				writer.write(line + "\n");
+				flen += line.length();
+				writer.flush();
+				if (line.equals("</page>") && flen > 4000000) {
+					writer.write("</pageset>");
+					writer.close();
+					fid++;
+					writer = new PrintWriter(String.format(fileName, fid), "UTF-8");
+					writer.write(fhead);
+					flen = fhead.length();
+				}
+			}
+			log(fin.getName() + " done");
+		}
+		
+		writer.write("</pageset>");
+		writer.close();
+	}
+	
+	public static void Step8_DependencyAnalysis() throws Exception {
 		String parserModel = "edu/stanford/nlp/models/lexparser/chineseFactored.ser.gz";
 		
-		new CorpusLabProcess("Dependency analysis", InputDirPath[6], InputDirPath[7], 1) {
+		new CorpusLabProcess("Dependency analysis", InputDirPath[7], InputDirPath[8], 1) {
 			@Override
 			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
 				while (!sq.isEmpty()) {
@@ -445,6 +484,15 @@ public class WikitextProcess {
 						Element classify = doc.createElement("classify");
 						
 						String text = page.getElementsByTagName("text").item(0).getTextContent();
+						String[] splitText = text.split(" ");
+						
+						System.out.printf("[%d] %s\n", splitText.length, text);
+						if (splitText.length > 100) {
+							System.out.println("Skip due to too long sentence");
+							page.appendChild(classify);
+							continue;
+						}
+						
 						try {
 							List<CoreLabel> rawWords = SentenceUtils.toCoreLabelList(text.split(" "));
 							Tree parse = lp.apply(rawWords);
