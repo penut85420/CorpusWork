@@ -12,6 +12,7 @@ import org.oppai.utils.LibraryUtils;
 import org.w3c.dom.*;
 
 import edu.ntou.cs.nlp.extend.*;
+import edu.ntou.cs.nlp.object.ChTool;
 import edu.ntou.cs.nlp.object.CorpusLabProcess;
 import edu.ntou.cs.nlp.wordSegmentation.segmentor.WordSegmentor;
 import edu.stanford.nlp.ling.CoreLabel;
@@ -44,17 +45,18 @@ public class WikitextProcess {
 		LibraryUtils.timestamp("WikitextProcess");
 		// Regular Step
 		// Step1_SimpleReplace();
-		// Step2_FirstParagraphRetrive();
-		// Step3_WikitextToPlaintext();
-		// Step4_MakeSimple();
-		// Step5_WordSeg();
-		// Step6_Rewrite();
-		Step7_DependencyAnalysis();
+		Step2_FirstParagraphRetrive();
+		Step3_WikitextToPlaintext();
+		Step4_MakeSimple();
+		Step5_WordSeg();
+		Step6_Rewrite();
+		// Step7_DependencyAnalysis();
 		
 		// Process above done in 472s 
 		
 		// Testing Field
 		// Test_ShowDisambiguation();
+		Test_TitleList2();
 		
 		log("WikitextProcess done in " + LibraryUtils.timestamp("WikitextProcess") + "s");
 		LibraryUtils.bgm();
@@ -148,16 +150,13 @@ public class WikitextProcess {
 						// Deal with category
 						Element category = fout.createElement("category");
 						Matcher m = Pattern.compile("(?i)\\[\\[category:(.*?)\\]\\]").matcher(text);
-						if (m.find()) {
-							String[] cat = m.group(1).split("\\|");
-							
-							for (String s : cat) {
-								String ts = s.trim();
-								if (!ts.isEmpty() && !ts.equals("*"))
-									category.appendChild(createTextTag(fout, "cat", new String(ts.getBytes(), "UTF-8")));
-							}
-							page.appendChild(category);
+						while (m.find()) {
+							String ss = m.group(1);
+							int idx = ss.indexOf("|");
+							if (idx < 0) idx = ss.length();
+							category.appendChild(createTextTag(fout, "cat", new String(ss.substring(0, idx).getBytes(), "UTF-8")));
 						}
+						page.appendChild(category);
 						
 						// Deal with first paragraph
 						text = clearTag(text, "<!--", "<", ">", 1);
@@ -486,17 +485,16 @@ public class WikitextProcess {
 	
 	// ===== Testing =====
 	
+	/**
+	 * 此段程式碼為偵測消岐義的頁面
+	 * 透過偵測該頁面內容是否包含 "{{disambiguation}}" 和 "{{disambiguation|" 為基準
+	 * 若單純偵測 "disambiguation"
+	 * 可能會誤刪內文包含引用消岐義語法的一般頁面
+	 * 
+	 * 2018三月的版本初估有480個消岐義頁面
+	 */
+	
 	public static void Test_ShowDisambiguation() throws Exception {
-		
-		/**
-		 * 此段程式碼為偵測消岐義的頁面
-		 * 透過偵測該頁面內容是否包含 "{{disambiguation}}" 和 "{{disambiguation|" 為基準
-		 * 若單純偵測 "disambiguation"
-		 * 可能會誤刪內文包含引用消岐義語法的一般頁面
-		 * 
-		 * 2018三月的版本初估有480個消岐義頁面
-		 */
-		
 		String processName = "Show disambiguation";
 		String inputDirPath = "D:\\Documents\\Corpus\\wiki\\Step1_zhwiki_wikitext_wellformed_xml\\";
 		inputDirPath = "D:\\Documents\\Corpus\\wiki\\Step1_zhwiki_wikitext_wellformed_xml\\";
@@ -556,6 +554,40 @@ public class WikitextProcess {
 		System.out.printf("%s done in %.3f seconds\n", processName, LibraryUtils.timestamp());
 		
 		// Done in 169s
+	}
+	
+	/**
+	 * 把所有標題取出來變成檔案
+	 * @throws Exception
+	 */
+	
+	public static void Test_TitleList() throws Exception {
+		File dirInn = new File(InputDirPath[4]);
+		
+		for (File fin : dirInn.listFiles()) {
+			Document doc = LibraryIO.loadXML(fin);
+			NodeList nd = doc.getElementsByTagName("title");
+			Writer w = new PrintWriter("D:\\Documents\\Corpus\\wiki\\title\\" + fin.getName() + ".title.txt");
+			
+			for (int i = 0; i < nd.getLength(); i++)
+				w.write(nd.item(i).getTextContent() + "\n");
+			
+			log(fin.getName() + " done");
+			w.close();
+		}
+	}
+	
+	public static void Test_TitleList2() throws Exception {
+		File dirInn = new File("D:\\Documents\\Corpus\\wiki\\title\\");
+		Writer w = new PrintWriter("D:\\Documents\\Corpus\\wiki\\title.txt");
+		
+		for (File fin : dirInn.listFiles()) {
+			String[] lines = LibraryIO.loadFileAsLines(fin.getPath());
+			for (String line : lines)
+				w.write(line + "\t" + ChTool.toSimplified(line) + "\n");
+			log(fin.getName() + " done");
+		}
+		w.close();
 	}
 	
 	// ===== Tool Functions =====
