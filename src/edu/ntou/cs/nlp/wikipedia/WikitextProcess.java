@@ -46,18 +46,19 @@ public class WikitextProcess {
 		LibraryUtils.timestamp("WikitextProcess");
 		// Regular Step
 		// Step1_SimpleReplace();
-		Step2_FirstParagraphRetrive();
-		Step3_WikitextToPlaintext();
-		Step4_MakeSimple();
-		Step5_WordSeg();
-		Step6_Rewrite();
-		// Step7_DependencyAnalysis();
+		// Step2_FirstParagraphRetrive();
+		// Step3_WikitextToPlaintext();
+		// Step4_MakeSimple();
+		// Step5_WordSeg();
+		// Step6_Rewrite();
+		// Step7_Merge();
+		Step8_DependencyAnalysis();
 		
 		// Process above done in 472s 
 		
 		// Testing Field
 		// Test_ShowDisambiguation();
-		Test_TitleList2();
+		// Test_TitleList();
 		
 		log("WikitextProcess done in " + LibraryUtils.timestamp("WikitextProcess") + "s");
 		LibraryUtils.bgm();
@@ -101,7 +102,6 @@ public class WikitextProcess {
 		// 8 threads done in  90s
 	}
 	
-	// TODO: Category retrive incorrect
 	/**
 	 * 擷取首段章節的部分
 	 * 並且移除年表、消岐義、重定向等頁面
@@ -136,8 +136,8 @@ public class WikitextProcess {
 						String title = e.getElementsByTagName("title").item(0).getTextContent();
 						
 						// Skip if list kind
-						if (title.endsWith("年表")) continue;
-						if (title.endsWith("列表")) continue;
+						if (title.contains("年表")) continue;
+						if (title.contains("列表")) continue;
 						
 						// Deal with text
 						String text = e.getElementsByTagName("text").item(0).getTextContent();
@@ -151,6 +151,14 @@ public class WikitextProcess {
 						// Deal with category
 						Element category = fout.createElement("category");
 						Matcher m = Pattern.compile("(?i)\\[\\[category:(.*?)\\]\\]").matcher(text);
+						while (m.find()) {
+							String ss = m.group(1);
+							int idx = ss.indexOf("|");
+							if (idx < 0) idx = ss.length();
+							category.appendChild(createTextTag(fout, "cat", new String(ss.substring(0, idx).getBytes(), "UTF-8")));
+						}
+						
+						m = Pattern.compile("(?i)\\[\\[分類:(.*?)\\]\\]").matcher(text);
 						while (m.find()) {
 							String ss = m.group(1);
 							int idx = ss.indexOf("|");
@@ -173,7 +181,7 @@ public class WikitextProcess {
 					
 					// XML Output
 					LibraryIO.writeXML(outputDirPath + fin.getName(), fout);
-					System.out.println(fin.getName() + " done");
+					System.out.println(fin.getName() + " done first para");
 				}
 			}
 		}.start();
@@ -203,7 +211,6 @@ public class WikitextProcess {
 		SyncQueue<File> sq = new SyncQueue<File>(Arrays.asList(inputDir.listFiles()));
 
 		Runnable r = ()->{
-			int tid = LibraryUtils.getRand(10, 99);
 			while (!sq.isEmpty()) {
 				try {
 					File fin = sq.poll();
@@ -238,7 +245,7 @@ public class WikitextProcess {
 					}
 					
 					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
-					System.out.printf("%s done by thread %d\n", fin.getName(), tid);
+					System.out.printf("%s done wikitxt to plain\n", fin.getName());
 				} catch (Exception e) { e.printStackTrace(); }
 			}
 		};
@@ -287,7 +294,7 @@ public class WikitextProcess {
 					}
 					
 					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
-					log(fin.getName() + " done");
+					log(fin.getName() + " done make simple");
 				}
 			}
 		}.start();
@@ -313,7 +320,6 @@ public class WikitextProcess {
 			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {		
 				while (!sq.isEmpty()) {
 					File fin = sq.poll();
-					System.out.println("Segmenting " + fin.getName());
 					Document doc = LibraryIO.loadXML(fin);
 					NodeList context = doc.getElementsByTagName("text");
 					
@@ -322,7 +328,7 @@ public class WikitextProcess {
 						String seged = ws.MaximumMatch(context.item(i).getTextContent().replaceAll("={2,}+[^=]+?=+", ""), 1).replaceAll("[\r\n]", "");
 						context.item(i).setTextContent(new String(seged.getBytes("UTF-8"), "UTF-8"));
 					}
-					
+					System.out.println(fin.getName() + " done segmention");
 					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
 				}
 			}
@@ -413,7 +419,7 @@ public class WikitextProcess {
 					}
 					
 					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
-					log(fin.getName() + " is done");
+					log(fin.getName() + " done rewrite");
 					// break;
 				}
 			}
@@ -424,36 +430,40 @@ public class WikitextProcess {
 	}
 	
 	public static void Step7_Merge() throws Exception {
+		int fileBaseSize = 2 * 1024 * 1024;
 		File dirIn = new File(InputDirPath[6]);
 		File dirOut = new File(InputDirPath[7]);
 		
 		if (!dirOut.exists()) dirOut.mkdirs();
 		
 		int fid = 1;
-		String fileName = InputDirPath[7] + "zhwikiMain_%04d.xml";
+		String fileNameFormat = InputDirPath[7] + "zhwikiMain_%04d.xml";
+		String fileName = String.format(fileNameFormat, fid);
+		
 		String fhead = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<pageset>\n";
 		// System.out.printf(fileName, fid);
 		
-		PrintWriter writer = new PrintWriter(String.format(fileName, fid), "UTF-8");
+		PrintWriter writer = new PrintWriter(fileName, "UTF-8");
+		File fout = new File(fileName);
 		writer.write(fhead);
-		long flen = fhead.length();
 		
 		for (File fin : dirIn.listFiles()) {
 			for (String line : LibraryIO.loadFileAsLines(fin.getPath())) {
 				if (line.equals("<pageset>") || line.startsWith("<?xml vers") || line.equals("</pageset>")) continue;
 				writer.write(line + "\n");
-				flen += line.length();
 				writer.flush();
-				if (line.equals("</page>") && flen > 4000000) {
+				
+				if (line.equals("</page>") && fout.length() > fileBaseSize) {
 					writer.write("</pageset>");
 					writer.close();
-					fid++;
-					writer = new PrintWriter(String.format(fileName, fid), "UTF-8");
+
+					fileName = String.format(fileNameFormat, ++fid);
+					writer = new PrintWriter(fileName, "UTF-8");
+					fout = new File(fileName);
 					writer.write(fhead);
-					flen = fhead.length();
 				}
 			}
-			log(fin.getName() + " done");
+			log(fin.getName() + " done merge");
 		}
 		
 		writer.write("</pageset>");
@@ -609,19 +619,40 @@ public class WikitextProcess {
 	 */
 	
 	public static void Test_TitleList() throws Exception {
-		File dirInn = new File(InputDirPath[4]);
-		
-		for (File fin : dirInn.listFiles()) {
-			Document doc = LibraryIO.loadXML(fin);
-			NodeList nd = doc.getElementsByTagName("title");
-			Writer w = new PrintWriter("D:\\Documents\\Corpus\\wiki\\title\\" + fin.getName() + ".title.txt");
+		new CorpusLabProcess("Title list", InputDirPath[4], "D:\\Documents\\Corpus\\Wiki\\TitleList\\") {
 			
-			for (int i = 0; i < nd.getLength(); i++)
-				w.write(nd.item(i).getTextContent() + "\n");
-			
-			log(fin.getName() + " done");
-			w.close();
-		}
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
+				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					Document doc = LibraryIO.loadXML(fin);
+					NodeList nd = doc.getElementsByTagName("page");
+					
+					Document dout = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+					Element dout_titleset = dout.createElement("titleset");
+					
+					for (int i = 0; i < nd.getLength(); i++) {
+						Element page = (Element) nd.item(i);
+						String title = page.getElementsByTagName("title").item(0).getTextContent();
+						String text  = page.getElementsByTagName("text") .item(0).getTextContent();
+						NodeList catlist = page.getElementsByTagName("cat");
+						
+						Element dout_title = dout.createElement("title");
+						dout_title.appendChild(createTextTag(dout, "titletw", title));
+						dout_title.appendChild(createTextTag(dout, "titlecn", ChTool.toSimplified(title)));
+						dout_title.appendChild(createTextTag(dout, "first", text));
+						Element dout_category = dout.createElement("category");
+						for (int j = 0; j < catlist.getLength(); j++)
+							dout_category.appendChild(createTextTag(dout, "cat", catlist.item(j).getTextContent()));
+						dout_title.appendChild(dout_category);
+						dout_titleset.appendChild(dout_title);
+					}
+					dout.appendChild(dout_titleset);
+					log(fin.getName() + " done title list");
+					LibraryIO.writeXML(outputDirPath + fin.getName(), dout);
+				}
+			}
+		}.start();;
 	}
 	
 	public static void Test_TitleList2() throws Exception {
@@ -686,7 +717,6 @@ public class WikitextProcess {
 	 * @param content that include sth like [[link]]
 	 * @return link
 	 */
-	
 	
 	public static String getLinkText(String content) {
 		while (content.indexOf("[[") != -1) {
