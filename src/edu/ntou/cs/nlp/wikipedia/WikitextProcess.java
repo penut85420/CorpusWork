@@ -51,8 +51,8 @@ public class WikitextProcess {
 		// Step4_MakeSimple();
 		// Step5_WordSeg();
 		// Step6_Rewrite();
-		Step7_Merge();
-		// Step8_DependencyAnalysis();
+		// Step7_Merge();
+		Step8_DependencyAnalysis();
 		
 		// Process above done in 472s 
 		
@@ -477,11 +477,16 @@ public class WikitextProcess {
 			@Override
 			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
 				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					if (new File(outputDirPath + fin.getName()).exists()) {
+						System.out.println("Skip " + fin.getName());
+						continue;
+					}
+					
 					LexicalizedParser lp = LexicalizedParser.loadModel(parserModel);
 					TreebankLanguagePack tlp = lp.treebankLanguagePack();
 					GrammaticalStructureFactory gsf = tlp.grammaticalStructureFactory();
 					
-					File fin = sq.poll();
 					LibraryUtils.timestamp(fin.toString());
 					Document doc = LibraryIO.loadXML(fin);
 					NodeList pages = doc.getElementsByTagName("page");
@@ -544,7 +549,7 @@ public class WikitextProcess {
 							
 							System.out.printf("%s %d/%d done\n", fin.getName(), i + 1, pageslen);
 						} catch (Exception e) { e.printStackTrace(); }
-						break; // When test on 1 page
+						// break; // When test on 1 page
 					}
 					
 					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
