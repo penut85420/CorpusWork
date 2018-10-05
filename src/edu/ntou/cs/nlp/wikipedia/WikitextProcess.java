@@ -16,7 +16,6 @@ import edu.ntou.cs.nlp.object.ChTool;
 import edu.ntou.cs.nlp.object.CorpusLabProcess;
 import edu.ntou.cs.nlp.wordSegmentation.segmentor.WordSegmentor;
 import edu.stanford.nlp.ling.CoreLabel;
-import edu.stanford.nlp.ling.IndexedWord;
 import edu.stanford.nlp.ling.SentenceUtils;
 import edu.stanford.nlp.parser.lexparser.LexicalizedParser;
 import edu.stanford.nlp.trees.GrammaticalStructure;
@@ -40,6 +39,7 @@ public class WikitextProcess {
 		"D:\\Documents\\Corpus\\wiki\\Step6_zhwiki_rewrite\\",
 		"D:\\Documents\\Corpus\\wiki\\Step7_zhwiki_merge\\",
 		"D:\\Documents\\Corpus\\wiki\\Step8_zhwiki_dep\\",
+		"D:\\Documents\\Corpus\\wiki\\Step9_zhwiki_dep2\\",
 	};
 	
 	public static void main(String[] args) throws Exception {
@@ -51,8 +51,8 @@ public class WikitextProcess {
 		// Step4_MakeSimple();
 		// Step5_WordSeg();
 		// Step6_Rewrite();
-		// Step7_Merge();
-		Step8_DependencyAnalysis();
+		Step7_Merge();
+		// Step8_DependencyAnalysis();
 		
 		// Process above done in 472s 
 		
@@ -430,7 +430,7 @@ public class WikitextProcess {
 	}
 	
 	public static void Step7_Merge() throws Exception {
-		int fileBaseSize = 2 * 1024 * 1024;
+		int fileBaseSize = 3 * 1024;
 		File dirIn = new File(InputDirPath[6]);
 		File dirOut = new File(InputDirPath[7]);
 		
@@ -473,7 +473,7 @@ public class WikitextProcess {
 	public static void Step8_DependencyAnalysis() throws Exception {
 		String parserModel = "edu/stanford/nlp/models/lexparser/chineseFactored.ser.gz";
 		
-		new CorpusLabProcess("Dependency analysis", InputDirPath[7], InputDirPath[8], 1) {
+		new CorpusLabProcess("Dependency analysis", InputDirPath[6], InputDirPath[8], 1) {
 			@Override
 			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
 				while (!sq.isEmpty()) {
@@ -489,7 +489,8 @@ public class WikitextProcess {
 					
 					for (int i = 0; i < pageslen; i++) {
 						Element page = (Element) pages.item(i);
-						Element classify = doc.createElement("classify");
+						Element depTree = doc.createElement("deptree");
+						Element tdlxml = doc.createElement("tdl");
 						
 						String text = page.getElementsByTagName("text").item(0).getTextContent();
 						String[] splitText = text.split(" ");
@@ -497,38 +498,53 @@ public class WikitextProcess {
 						System.out.printf("[%d] %s\n", splitText.length, text);
 						if (splitText.length > 100) {
 							System.out.println("Skip due to too long sentence");
-							page.appendChild(classify);
+							page.appendChild(depTree);
 							continue;
 						}
 						
 						try {
 							List<CoreLabel> rawWords = SentenceUtils.toCoreLabelList(text.split(" "));
+							
+							// Parsing tree and output
 							Tree parse = lp.apply(rawWords);
+							depTree.setTextContent(parse.toString());
+							page.appendChild(depTree);
+							
+							// Type Dependency
 							GrammaticalStructure gs = gsf.newGrammaticalStructure(parse);
 							List<TypedDependency> tdl = gs.typedDependenciesCCprocessed();
 							Iterator<TypedDependency> it = tdl.iterator();
-							
-							TypedDependency first = it.next();
-							String title = first.dep().word();
-							IndexedWord tobe = first.gov();
-							
-							String classifyContent = String.format("Result:\n%s 是 %s (%s)\n", title, tobe.word(), first.reln());
+							// tdlxml.setTextContent(tdl.toString());
 							
 							while (it.hasNext()) {
 								TypedDependency td = it.next();
-								// if (tobe.equals(td.gov())) log(td);
-								if (tobe.equals(td.gov())) {
-									if (td.reln().getShortName().equals("compound:nn"))
-										classifyContent += String.format("而且是 %s 的 %s\n", td.dep().word(), tobe.word());
-									else if (td.reln().getShortName().equals("nmod:assmod"))
-										classifyContent += String.format("而且是某種 %s 的 %s\n", td.dep().word(), tobe.word());
-								}
+								log(String.format("reln: %s, %s %s %d, %s %s %d", td.reln(),
+										td.dep().word(), td.dep().tag(), td.dep().index(),
+										td.gov().word(), td.gov().tag(), td.gov().index()));
+								tdlxml.appendChild(createTextTag(doc, "td", td.toString()));
 							}
-							classify.setTextContent(classifyContent);
-							page.appendChild(classify);
+							page.appendChild(tdlxml);
+//							TypedDependency first = it.next();
+//							String title = first.dep().word();
+//							IndexedWord tobe = first.gov();
+							
+//							String classifyContent = String.format("%s(%s)\n", title, tobe.word(), first.reln());
+//							
+//							while (it.hasNext()) {
+//								TypedDependency td = it.next();
+//								// if (tobe.equals(td.gov())) log(td);
+//								if (tobe.equals(td.gov())) {
+//									if (td.reln().getShortName().equals("compound:nn"))
+//										classifyContent += String.format("%s%s\n", td.dep().word(), tobe.word());
+//									else if (td.reln().getShortName().equals("nmod:assmod"))
+//										classifyContent += String.format("%s%s\n", td.dep().word(), tobe.word());
+//								}
+//							}
+							
 							
 							System.out.printf("%s %d/%d done\n", fin.getName(), i + 1, pageslen);
 						} catch (Exception e) { e.printStackTrace(); }
+						break; // When test on 1 page
 					}
 					
 					LibraryIO.writeXML(outputDirPath + fin.getName(), doc);
@@ -666,6 +682,10 @@ public class WikitextProcess {
 			log(fin.getName() + " done");
 		}
 		w.close();
+	}
+	
+	public static void Test_CategoryCount() throws Exception {
+		
 	}
 	
 	// ===== Tool Functions =====
