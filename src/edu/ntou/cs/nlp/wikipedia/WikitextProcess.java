@@ -473,7 +473,7 @@ public class WikitextProcess {
 	public static void Step8_DependencyAnalysis() throws Exception {
 		String parserModel = "edu/stanford/nlp/models/lexparser/chineseFactored.ser.gz";
 		
-		new CorpusLabProcess("Dependency analysis", InputDirPath[6], InputDirPath[8], 1) {
+		new CorpusLabProcess("Dependency analysis", InputDirPath[7], InputDirPath[8], 1) {
 			@Override
 			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
 				while (!sq.isEmpty()) {
@@ -523,9 +523,9 @@ public class WikitextProcess {
 							
 							while (it.hasNext()) {
 								TypedDependency td = it.next();
-								log(String.format("reln: %s, %s %s %d, %s %s %d", td.reln(),
-										td.dep().word(), td.dep().tag(), td.dep().index(),
-										td.gov().word(), td.gov().tag(), td.gov().index()));
+//								log(String.format("reln: %s, %s %s %d, %s %s %d", td.reln(),
+//										td.dep().word(), td.dep().tag(), td.dep().index(),
+//										td.gov().word(), td.gov().tag(), td.gov().index()));
 								tdlxml.appendChild(createTextTag(doc, "td", td.toString()));
 							}
 							page.appendChild(tdlxml);
