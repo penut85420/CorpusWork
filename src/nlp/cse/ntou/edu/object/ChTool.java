@@ -1,9 +1,9 @@
-package edu.ntou.cs.nlp.object;
+package nlp.cse.ntou.edu.object;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import org.oppai.io.LibraryIO;
+import org.oppai.LibraryIO;
 
 public class ChTool {
 	static Map<String, String> ctcs;

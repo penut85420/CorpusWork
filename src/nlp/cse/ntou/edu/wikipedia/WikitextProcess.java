@@ -1,4 +1,4 @@
-package edu.ntou.cs.nlp.wikipedia;
+package nlp.cse.ntou.edu.wikipedia;
 
 import java.io.*;
 import java.util.*;
@@ -7,14 +7,11 @@ import java.util.regex.Pattern;
 
 import javax.xml.parsers.*;
 
-import org.oppai.io.LibraryIO;
-import org.oppai.utils.LibraryUtils;
+import org.oppai.LibraryIO;
+import org.oppai.LibraryUtils;
 import org.w3c.dom.*;
 
-import edu.ntou.cs.nlp.extend.*;
-import edu.ntou.cs.nlp.object.ChTool;
-import edu.ntou.cs.nlp.object.CorpusLabProcess;
-import edu.ntou.cs.nlp.wordSegmentation.segmentor.WordSegmentor;
+import nlp.cse.ntou.edu.wordSegmentation.segmentor.WordSegmentor;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.ling.SentenceUtils;
 import edu.stanford.nlp.parser.lexparser.LexicalizedParser;
@@ -23,10 +20,13 @@ import edu.stanford.nlp.trees.GrammaticalStructureFactory;
 import edu.stanford.nlp.trees.Tree;
 import edu.stanford.nlp.trees.TreebankLanguagePack;
 import edu.stanford.nlp.trees.TypedDependency;
+import nlp.cse.ntou.edu.extend.*;
+import nlp.cse.ntou.edu.object.ChTool;
+import nlp.cse.ntou.edu.object.CorpusLabProcess;
 
-import static org.oppai.utils.LibraryUtils.log;
-import static edu.ntou.cs.nlp.object.WordsList.isCall;
-import static edu.ntou.cs.nlp.object.WordsList.isAlso;
+import static nlp.cse.ntou.edu.object.WordsList.isAlso;
+import static nlp.cse.ntou.edu.object.WordsList.isCall;
+import static org.oppai.LibraryUtils.log;
 
 public class WikitextProcess {
 	final static String[] InputDirPath = {
@@ -39,7 +39,8 @@ public class WikitextProcess {
 		"D:\\Documents\\Corpus\\wiki\\Step6_zhwiki_rewrite\\",
 		"D:\\Documents\\Corpus\\wiki\\Step7_zhwiki_merge\\",
 		"D:\\Documents\\Corpus\\wiki\\Step8_zhwiki_dep\\",
-		"D:\\Documents\\Corpus\\wiki\\Step9_zhwiki_dep2\\",
+		"D:\\Documents\\Corpus\\wiki\\Step9_zhwiki_typedep\\",
+		"D:\\Documents\\Corpus\\wiki\\Step10_zhwiki_typedep_merge\\",
 	};
 	
 	public static void main(String[] args) throws Exception {
@@ -52,26 +53,19 @@ public class WikitextProcess {
 		// Step5_WordSeg();
 		// Step6_Rewrite();
 		// Step7_Merge();
-		Step8_DependencyAnalysis();
+		// Step8_DependencyAnalysis();
 		
 		// Process above done in 472s 
 		
 		// Testing Field
 		// Test_ShowDisambiguation();
 		// Test_TitleList();
+		// Test_Count();
+		Test_OnlyTitleAndCategory();
 		
 		log("WikitextProcess done in " + LibraryUtils.timestamp("WikitextProcess") + "s");
 		LibraryUtils.bgm();
 	}
-	
-	/**
-	 * Common Begin & End
-	 * 
-	 * log(processName + " begin");
-	 * LibraryUtils.timestamp();
-	 * 
-	 * System.out.printf("%s done in %.3f seconds\n", processName, LibraryUtils.timestamp());
-	 */
 
 	/**
 	 * 將 "&#160" 轉換成 "&#160;"，以符合正規 XML Format
@@ -137,16 +131,16 @@ public class WikitextProcess {
 						
 						// Skip if list kind
 						if (title.contains("年表")) continue;
-						if (title.contains("列表")) continue;
+						if (title.contains("列表")) continue;						
 						
 						// Deal with text
 						String text = e.getElementsByTagName("text").item(0).getTextContent();
+						String text_lower = text.toLowerCase();
 						
-						// Skip if disambiguation or redirect
-						if (text.toLowerCase().contains("{{disambiguation}}")) continue;
-						if (text.toLowerCase().contains("{{disambiguation|")) continue;
-						if (text.toLowerCase().startsWith("#redirect")) continue;
-						if (text.startsWith("#重定向")) continue;
+						// Skip if disambiguation or redirect						
+						if (text_lower.contains("{{disambig")) continue;
+						if (text_lower.contains("#redirect")) continue;
+						if (text_lower.contains("#重定向")) continue;
 						
 						// Deal with category
 						Element category = fout.createElement("category");
@@ -225,6 +219,7 @@ public class WikitextProcess {
 						text = text.replaceAll("(?i)\\{\\{" + Pattern.quote(title) + "\\}\\}", title); // 把 Fake Title 語法改成 Plain Text
 						text = clearTag(text, "{{", "{", "}", 2); // 移除 {{tag}} 語法
 						text = clearTag(text, "[[File", "[", "]", 2); // 移除圖片插入語法
+						text = clearTag(text, "[[file", "[", "]", 2); // 移除圖片插入語法
 						text = text.replaceAll("<.*?/>", ""); // 移除 Self-Closed Tag
 						text = text.replaceAll("(?s)<ref.*?>.*?</ref>", ""); // 移除 <ref..>text</ref> 中間的文字
 						text = text.replaceAll("(?s)<div.*?>.*?</div>", ""); // 移除 <div..>text</div> 中間的文字
@@ -428,16 +423,23 @@ public class WikitextProcess {
 		// 1t 324s
 		// 8t 101s
 	}
+
+	/**
+	 * 雖然是 Merge 但其實是 Split 成更小的檔案
+	 * @throws Exception
+	 */
 	
 	public static void Step7_Merge() throws Exception {
-		int fileBaseSize = 3 * 1024;
-		File dirIn = new File(InputDirPath[6]);
-		File dirOut = new File(InputDirPath[7]);
+		int fileBaseSize = 4 * 1024 * 1024;
+		System.out.println(fileBaseSize);
+		// return ;
+		File dirIn = new File(InputDirPath[9]);
+		File dirOut = new File(InputDirPath[10]);
 		
 		if (!dirOut.exists()) dirOut.mkdirs();
 		
 		int fid = 1;
-		String fileNameFormat = InputDirPath[7] + "zhwikiMain_%04d.xml";
+		String fileNameFormat = InputDirPath[10] + "zhwikiMain_%04d.xml";
 		String fileName = String.format(fileNameFormat, fid);
 		
 		String fhead = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<pageset>\n";
@@ -469,6 +471,12 @@ public class WikitextProcess {
 		writer.write("</pageset>");
 		writer.close();
 	}
+	
+	/**
+	 * 使用 Stanford Parser 分析 Lexical Parsing Tree 跟 Type Dependency
+	 * 以及 Head Retrieve
+	 * @throws Exception
+	 */
 	
 	public static void Step8_DependencyAnalysis() throws Exception {
 		String parserModel = "edu/stanford/nlp/models/lexparser/chineseFactored.ser.gz";
@@ -691,6 +699,79 @@ public class WikitextProcess {
 	
 	public static void Test_CategoryCount() throws Exception {
 		
+	}
+	
+	/**
+	 * 驗證檔案編號是否連續
+	 * @throws Exception
+	 */
+	
+	public static void Test_Count() throws Exception {
+		String dirPath = InputDirPath[8];
+		File dir = new File(dirPath);
+		
+		String s = "zhwikiMain_%04d.xml";
+		Pattern p = Pattern.compile("zhwikiMain_([0-9]*).xml");
+		int max = 0, min = 999999;
+		
+		for (File fin : dir.listFiles()) {
+			String name = fin.getName();
+			Matcher m = p.matcher(name);
+			if (m.find()) {
+				int n = Integer.parseInt(m.group(1));
+				if (n > max) max = n;
+				if (n < min) min = n;
+			}
+		}
+		
+		for (int i = min; i <= max; i+=1) {
+			String name = String.format(s, i);
+			if (!new File(dirPath + name).exists()) {
+				System.out.println(i + " not exist");
+			}
+		}
+		System.out.println("Min " + min + " Total " + max);
+	}
+	
+	public static void Test_OnlyTitleAndCategory() throws Exception {
+		String dirInnPath = "D:\\Documents\\Corpus\\wiki\\Step2_zhwiki_first\\";
+		String dirOutPath = "D:\\Documents\\Corpus\\wiki\\zhwiki_title_category\\";
+		
+		new CorpusLabProcess("Title and category", dirInnPath, dirOutPath) {
+			
+			@Override
+			public void run(SyncQueue<File> sq, String outputDirPath) throws Exception {
+				while (!sq.isEmpty()) {
+					File fin = sq.poll();
+					Document doc = LibraryIO.loadXML(fin);
+					Document dout = LibraryIO.getNewXML();
+					Node pageset = dout.createElement("pageset"); 
+					NodeList nd = doc.getElementsByTagName("page");
+					
+					for (int i = 0; i < nd.getLength(); i++) {
+						Element page = (Element) nd.item(i);
+						Node d_page = dout.createElement("page");
+						Node d_zhtitle = dout.createElement("zhtitle");
+						d_zhtitle.setTextContent(page.getElementsByTagName("title").item(0).getTextContent());
+						Node d_zhcat = dout.createElement("zhcategory");
+						
+						NodeList ndcat = page.getElementsByTagName("cat");
+						for (int j = 0; j < ndcat.getLength(); j++) {
+							Node cat = dout.createElement("zhcat");
+							cat.setTextContent(ndcat.item(j).getTextContent());
+							d_zhcat.appendChild(cat);
+						}
+						
+						d_page.appendChild(d_zhtitle);
+						d_page.appendChild(d_zhcat);
+						pageset.appendChild(d_page);
+					}
+					dout.appendChild(pageset);
+					LibraryIO.writeXML(outputDirPath + fin.getName(), dout);
+					System.out.println(fin.getName());
+				}
+			}
+		}.start();
 	}
 	
 	// ===== Tool Functions =====

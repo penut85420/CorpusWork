@@ -1,11 +1,11 @@
-package edu.ntou.cs.nlp.wikipedia;
+package nlp.cse.ntou.edu.wikipedia;
 
 import java.io.*;
 
-import org.oppai.io.LibraryIO;
+import org.oppai.LibraryIO;
 
-import edu.ntou.cs.nlp.extend.SyncQueue;
-import edu.ntou.cs.nlp.object.CorpusLabProcess;
+import nlp.cse.ntou.edu.extend.SyncQueue;
+import nlp.cse.ntou.edu.object.CorpusLabProcess;
 
 public class InternalLangLinkProcess {
 	public static void main(String[] args) throws Exception {

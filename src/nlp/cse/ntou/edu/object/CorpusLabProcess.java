@@ -1,12 +1,12 @@
-package edu.ntou.cs.nlp.object;
+package nlp.cse.ntou.edu.object;
 
-import static org.oppai.utils.LibraryUtils.log;
+import static org.oppai.LibraryUtils.log;
 
 import java.io.File;
 import java.util.*;
-import org.oppai.utils.LibraryUtils;
+import org.oppai.LibraryUtils;
 
-import edu.ntou.cs.nlp.extend.SyncQueue;
+import nlp.cse.ntou.edu.extend.SyncQueue;
 
 public abstract class CorpusLabProcess {
 	

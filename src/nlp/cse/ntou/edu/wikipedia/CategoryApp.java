@@ -1,15 +1,15 @@
-package edu.ntou.cs.nlp.wikipedia;
+package nlp.cse.ntou.edu.wikipedia;
 
 import java.io.File;
 import java.util.ArrayList;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
-import org.oppai.io.LibraryIO;
-import org.oppai.utils.LibraryUtils;
+import org.oppai.LibraryIO;
+import org.oppai.LibraryUtils;
 import org.w3c.dom.*;
 
-import edu.ntou.cs.nlp.wordSegmentation.ui.SegmentorApp;
+import nlp.cse.ntou.edu.wordSegmentation.ui.SegmentorApp;
 import javafx.application.*;
 import javafx.geometry.*;
 import javafx.scene.Scene;

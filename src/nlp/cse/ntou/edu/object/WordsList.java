@@ -1,4 +1,4 @@
-package edu.ntou.cs.nlp.object;
+package nlp.cse.ntou.edu.object;
 
 import java.util.*;
 
