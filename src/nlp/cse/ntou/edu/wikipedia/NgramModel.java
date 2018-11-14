@@ -17,11 +17,9 @@ public class NgramModel {
 	
 	public static void main(String[] args) throws Exception {
 		// _00_Fix();
-		_01_Seg();
-		// _01_CountWordFrequncy();
+		// _01_Seg();
+		_02_CountWordFrequncy();
 	}
-	
-	
 	
 	public static void _00_Fix() throws Exception {
 		String dirInnPath = "D:\\Documents\\Corpus\\wiki\\zhwiki_20150325\\zhwiki-20150325_plainTXT\\";
@@ -110,12 +108,14 @@ public class NgramModel {
 				}
 			}
 		}.start();
+		
 		FileWriter fw = new FileWriter(new File(dirOutPath + "count.txt"));
 		List<String> keylist = new ArrayList<>(countWF.keySet());
 		Collections.sort(keylist);
 		fw.write(countTotal + "\tWF\n");
+		int id = 1000;
 		for (String k : keylist)
-			fw.write(k + "\t" + countWF.get(k) + "\n");
+			fw.write(k + "\t" + countWF.get(k) + "\t" + id++ + "\n");
 		fw.close();
 	}
 	
