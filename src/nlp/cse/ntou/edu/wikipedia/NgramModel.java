@@ -27,6 +27,7 @@ public class NgramModel {
 		String dictPath = "D:\\Documents\\Dictionary\\dictionary_main.txt";
 		WordSegmentor ws = new WordSegmentor(alphabetListPath, segSymbolInfoPath, dictPath, 5);
 		log(ws.MaximumMatch("《天涯明月刀》遊戲以古龍同名小說為改編，將小說原著人物還原遊戲中並重現小說中各式經典武俠招式。故事背景是在白玉京失蹤後的武俠生態，為了抗衡被方龍香獨攬大權的青龍會，四大高手各懷抱負先後創立了寒江城、帝王州、水龍吟與萬里殺四大盟會，並廣招太白、神威、唐門、丐幫、天香、五毒、真武、神刀八荒門派好手，一同抗衡青龍會的暴行。", 1));
+		_02_CountWordFrequncy();
 	}
 	
 	public static void _00_Fix() throws Exception {
@@ -116,12 +117,14 @@ public class NgramModel {
 				}
 			}
 		}.start();
+		
 		FileWriter fw = new FileWriter(new File(dirOutPath + "count.txt"));
 		List<String> keylist = new ArrayList<>(countWF.keySet());
 		Collections.sort(keylist);
 		fw.write(countTotal + "\tWF\n");
+		int id = 1000;
 		for (String k : keylist)
-			fw.write(k + "\t" + countWF.get(k) + "\n");
+			fw.write(k + "\t" + countWF.get(k) + "\t" + id++ + "\n");
 		fw.close();
 	}
 	
