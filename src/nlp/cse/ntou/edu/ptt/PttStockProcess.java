@@ -144,6 +144,7 @@ public class PttStockProcess {
 								subject = name + '\t' + listStockName2ID.get(name);
 						}
 						if (!subject.isEmpty() && !isMainSubjectFind) {
+							// System.out.printf("%s\t%s\t%s\t%s\t", args)
 							System.out.println(fin.getName());
 							System.out.println(articleTitleToURL(fin.getName()));
 							System.out.println("Main: " + subject);
