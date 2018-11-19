@@ -145,7 +145,7 @@ public class NgramModel {
 		String dirInnPath = "D:\\Documents\\Corpus\\wiki\\zhwiki_20150325\\stage2_zhwiki_seg\\";
 //		String dataBiCount = "D:\\Documents\\Corpus\\wiki\\zhwiki_20150325\\bi_count" + v + ".dat";
 //		String dataBiIndex = "D:\\Documents\\Corpus\\wiki\\zhwiki_20150325\\bi_index" + v + ".dat";
-		String biOutput = "D:\\Documents\\Corpus\\wiki\\zhwiki_20150325\\bi\\";
+// 		String biOutput = "D:\\Documents\\Corpus\\wiki\\zhwiki_20150325\\bi\\";
 		new CorpusLabAnalysis("Count word frequency", dirInnPath) {
 			
 			@Override
