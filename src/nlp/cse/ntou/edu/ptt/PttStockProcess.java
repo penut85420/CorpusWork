@@ -21,17 +21,18 @@ public class PttStockProcess {
 	static String alphabetListPath = "D:\\Documents\\JavaWorkspace\\WordSegmentation\\data\\list_alphabet.txt";
 	static String segSymbolInfoPath = "D:\\Documents\\Dictionary\\\\seg_symbol_space_only.txt";
 	static String dictPath = "D:\\Documents\\JavaWorkspace\\WordSegmentation\\data\\dictionary_main.txt";
-	static String tunedLexion = "D:\\Documents\\FatCatFatMeow\\Data\\lexion.txt";
+	static String tunedLexicon = "D:\\Documents\\FatCatFatMeow\\Data\\Lexicon.txt";
 	
 	static Map<String, String> listStockName2ID;
 	static Map<String, String> listStockID2Name;
 	
 	public static void main(String[] args) throws Exception {
 		// reopen();
-		// _00_WordSeg();
-		// _01_TunedLexion();
-		// _02_ReWordSeg();
+		_00_WordSeg();
+		_01_TunedLexicon();
+		_02_ReWordSeg();
 		_03_DetermineSubject();
+		// _04
 	} 
 	
 	public static void _00_WordSeg() throws Exception {
@@ -40,7 +41,7 @@ public class PttStockProcess {
 		String dirInnPath = "D:\\Documents\\FatCatFatMeow\\PTT\\Comment\\";
 		String dirOutPath = "D:\\Documents\\FatCatFatMeow\\PTT\\Comment_Seg\\";
 		
-		WordSegmentor ws = new WordSegmentor(alphabetListPath, segSymbolInfoPath, tunedLexion);
+		WordSegmentor ws = new WordSegmentor(alphabetListPath, segSymbolInfoPath, tunedLexicon);
 		ws.MaximumMatch("", 1);
 		
 		new CorpusLabProcess("Word segmention", dirInnPath, dirOutPath, 4) {
@@ -59,9 +60,9 @@ public class PttStockProcess {
 		}.start();
 	}
 	
-	public static void _01_TunedLexion() throws Exception {
+	public static void _01_TunedLexicon() throws Exception {
 		String dirInnPath = "D:\\Documents\\FatCatFatMeow\\PTT\\Stock_Seg\\";
-		String fileOutPath = "D:\\Documents\\FatCatFatMeow\\Data\\lexion.txt";
+		String fileOutPath = "D:\\Documents\\FatCatFatMeow\\Data\\Lexicon.txt";
 		Map<String, Integer> lexion = new HashMap<>();
 		
 		new CorpusLabAnalysis("Tuned lexion", dirInnPath, 1) {
@@ -89,7 +90,7 @@ public class PttStockProcess {
 		String dirInnPath = "D:\\Documents\\FatCatFatMeow\\PTT\\Stock\\";
 		String dirOutPath = "D:\\Documents\\FatCatFatMeow\\PTT\\Stock_Seg2\\";
 		
-		WordSegmentor ws = new WordSegmentor(alphabetListPath, segSymbolInfoPath, tunedLexion);
+		WordSegmentor ws = new WordSegmentor(alphabetListPath, segSymbolInfoPath, tunedLexicon);
 		ws.MaximumMatch("", 1);
 		
 		new CorpusLabProcess("Word segmention", dirInnPath, dirOutPath, 4) {
